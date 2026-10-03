@@ -1,191 +1,219 @@
-# UAP P2P Network
+<div align="center">
 
-A lightweight peer-to-peer (P2P) chat and file-sharing application built in
-Python for the CSE 433 (Blockchain & Distributed Security Lab) assignment.
+# 🔗 Jogajog — Peer-to-Peer Network
 
-Every running instance of the app is **both a TCP server and a TCP client**.
-There is no central server: peers connect directly to each other, exchange
-text messages, and transfer any kind of binary file (images, audio, video,
-PDFs, ZIPs, ...).
+**A serverless chat & file-sharing app built on raw TCP sockets**
 
-![Main window](screenshots/01_main_window.png)
+*CSE 433 — Blockchain & Distributed Security Lab · University of Asia Pacific*
 
-## Features
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![TCP](https://img.shields.io/badge/transport-TCP%20Sockets-4F46E5?style=for-the-badge)
+![No Server](https://img.shields.io/badge/architecture-serverless-22C55E?style=for-the-badge)
+![Status](https://img.shields.io/badge/status-working-success?style=for-the-badge)
 
-- Every peer is a TCP server **and** a TCP client
-- Direct peer-to-peer connections (no central server)
-- Handshake (`hello` / `hello_ack`) so peers learn each other's ID and name
-- Text chat with any connected peer
-- Binary file transfer in 64 KB chunks (works for files of any type and size)
-- Multiple simultaneous connections (one thread per peer)
-- Tkinter GUI with a live peer list and chat view
-- Errors (refused connection, timeout, disconnect) are shown in the chat log
-  instead of crashing the app
+</div>
 
-## Project Structure
+---
+
+Every running copy of this app is **both a server and a client**. There's no backend, no cloud, no middleman — two peers find each other by IP and port and talk directly over a TCP socket, exchanging text messages and files of any kind.
 
 ```
+   Peer A  ◄──────────►  Peer B
+      ▲                     ▲
+      │                     │
+      └────────► Peer C ◄───┘
+```
+
+## 📑 Table of Contents
+
+- [Features](#-features)
+- [Screenshots](#️-screenshots)
+- [Project Structure](#-project-structure)
+- [Requirements](#️-requirements)
+- [Getting Started](#-getting-started)
+- [Connecting Two Peers](#-connecting-two-peers)
+- [Chatting & Sending Files](#-chatting--sending-files)
+- [One Window, Many Conversations](#-one-window-many-conversations)
+- [How It Works](#-how-it-works)
+- [Message Protocol](#-message-protocol)
+- [Testing](#-testing)
+- [Error Handling](#️-error-handling)
+- [Limitations](#-limitations)
+- [Not In Scope](#-not-in-scope)
+- [Learn the Code](#-learn-the-code)
+
+## ✨ Features
+
+| | |
+|---|---|
+| 🖥️ **Server + Client in one** | Every peer listens for connections *and* dials out to others — no central server anywhere |
+| 🤝 **Handshake** | `hello` / `hello_ack` messages so each side learns the other's ID, name, and port before chatting starts |
+| 💬 **Direct text chat** | Message any connected peer, instantly, with no relay |
+| 📁 **Any file type** | Images, audio, video, PDFs, ZIPs — sent as raw bytes in 64 KB chunks, not loaded into memory whole |
+| 🧵 **Multi-peer, multi-thread** | One thread per connection, so you can talk to several peers at once without anything blocking |
+| 🎨 **Color-coded peers** | Each peer auto-themes to its own accent color based on its port, so two windows never look identical |
+| 🗂️ **Separate conversations** | Every connected peer gets its own private chat view — not one giant mixed log |
+| 🛡️ **Graceful errors** | Refused connections, timeouts, and disconnects show up as a message in the log, never a crash |
+
+## 🖼️ Screenshots
+<div align="center">
+
+| Peer A online | Peer B online |
+|:---:|:---:|
+| ![Peer A](Screenshot/peerA.png) | ![Peer B](Screenshot/peerB.png) |
+
+| Text chat | PDF transfer |
+|:---:|:---:|
+| ![Chat](Screenshot/sendingText1.png) | ![PDF](Screenshot/sendingPDF1.png) |
+
+| Audio & Video | Multiple Peer  |
+|:---:|:---:|
+| ![Chat](Screenshot/sendingVideo1.png) | ![PDF](Screenshot/Multiple_connection.png) |
+
+</div>
+
+## 📂 Project Structure
+
+```text
 P2P_Network/
-├── main.py            # Entry point: creates the window and starts the GUI
-├── gui.py             # Tkinter user interface (no networking code)
-├── p2p_node.py        # PeerNode class: sockets, threads, handshake, files
-├── protocol.py        # Message framing (length prefix + JSON) and constants
-├── downloads/         # Received files are saved here
-├── screenshots/       # Images used in this README
-└── README.md
+├── main.py              # Entry point — builds the window, starts the event loop
+├── gui.py                # Tkinter interface: sidebar, chat area, per-peer theming
+├── p2p_node.py           # PeerNode: sockets, threads, handshake, send/receive
+├── protocol.py           # Message framing (length prefix + JSON), constants
+├── downloads/            # Files received from other peers land here
+├── README.md             # You are here
+└── CODE_EXPLANATION.md   # Line-by-line walkthrough of every function
 ```
 
-| File | Responsibility |
-|------|----------------|
-| `main.py` | Creates the Tk window, builds `App`, runs the main loop |
-| `gui.py` | Draws the UI, validates input, shows events from the network layer |
-| `p2p_node.py` | All networking: listen, connect, handshake, send/receive text and files |
-| `protocol.py` | Turns Python dicts into framed bytes and back; message type constants |
+| File | Job |
+|---|---|
+| `main.py` | Opens the Tk window and starts the GUI — nothing else |
+| `gui.py` | Draws the UI and handles clicks; **zero** socket code |
+| `p2p_node.py` | All networking: listen, connect, handshake, text, files |
+| `protocol.py` | Turns Python dicts into wire bytes and back |
 
-## Requirements
+## ⚙️ Requirements
 
-- Python 3.10+ (the code uses the `X | None` type syntax)
-- No third-party packages: only `socket`, `threading`, `json`, `struct`,
-  `uuid`, `queue` and `tkinter` from the standard library
-- On some Linux distributions Tkinter must be installed separately:
-  `sudo apt install python3-tk`
+- 🐍 Python **3.10+** (the code uses `X | None` type hints)
+- 📦 **No third-party packages** — just `socket`, `threading`, `json`, `struct`, `uuid`, `queue`, `tkinter`
+- 🐧 Linux users may need: `sudo apt install python3-tk`
 
-## How to Run
-
-From inside the `P2P_Network` folder:
+## 🚀 Getting Started
 
 ```bash
 python main.py
 ```
 
-Run the command more than once (separate terminals, or separate computers on
-the same network) to simulate several peers.
+Run it more than once — separate terminals, or separate computers on the same network to simulate multiple peers.
 
-## How to Connect Two Peers
+## 🔌 Connecting Two Peers
 
-1. **Start Peer A**: enter a name (e.g. `Alice`) and a port (e.g. `5000`),
-   then click **Start Peer**. The status line turns green.
-2. **Start Peer B** in a second instance: name `Bob`, a *different* port
-   (e.g. `5001`), then click **Start Peer**.
-3. On Peer B, under **Connect to a peer**, enter Peer A's IP and port
-   (`127.0.0.1` and `5000` on the same computer), then click **Connect**.
-4. Both peers now list each other under **Connected peers**.
+1. **Start Peer A** — name `Tan`, port `6000`, click **Start Peer**
+2. **Start Peer B** (a second instance) — name `Tara`, port `6001`, click **Start Peer**
+3. On **Peer B**, under *Connect to a peer*, enter `127.0.0.1` and `6000`, click **Connect**
+4. Both windows now list each other under **Connected Peers** — each in its own color
 
-To test on two computers on the same Wi-Fi/LAN, use the other computer's
-local IP address (e.g. `192.168.1.10`) instead of `127.0.0.1`.
+```mermaid
+sequenceDiagram
+    participant B as Peer B (connecting)
+    participant A as Peer A (listening)
+    B->>A: TCP connect()
+    B->>A: hello { id, name, port }
+    A->>B: hello_ack { id, name, port }
+    Note over A,B: Both sides now know who the other is
+```
 
-| Peer A (Alice, port 5000) | Peer B (Bob, port 5001) |
+> 💡 **On two computers?** Use the other machine's LAN IP (e.g. `192.168.1.10`) instead of `127.0.0.1`.
+
+## 💬 Chatting & Sending Files
+
+| To... | Do this |
 |---|---|
-| ![Alice connected](screenshots/02_alice_connected.png) | ![Bob connected](screenshots/03_bob_connected.png) |
+| **Send a message** | Select a peer → type in the box → **Send** (or hit Enter) |
+| **Send a file** | Select a peer → **Choose File(pdfs, audio, video) & Send** → pick anything |
 
-## How to Send a Text Message
+Received files are saved automatically into `downloads/`.
 
-1. Select the target peer in the **Connected peers** list.
-2. Type in the message box at the bottom.
-3. Click **Send** (or press Enter).
+## 🗂 One Window, Many Conversations
 
-![Text chat](screenshots/04_text_chat.png)
+Each connected peer gets its **own chat history** — clicking a different name in the peer list switches the whole conversation view, exactly like switching threads in a messaging app instead of scrolling through one shared feed. Each peer is also auto-tinted to its own accent color (picked from its port number), so when you run two or three instances side by side for testing, they're visually easy to tell apart at a glance.
+| Peer Tara's Conversation With TAN | Peer Tara's Conversation With hridy |
+|:---:|:---:|
+| ![Tara->Tan](Screenshot/own_chat_history.png) | ![Tara->Hridy](Screenshot/own_chat_history2.png) |
 
-## How to Transfer a File
+## 🧩 How It Works
 
-1. Select the target peer in the **Connected peers** list.
-2. Click **Send File...** and pick any file.
-3. The file is sent as raw bytes in 64 KB chunks over the same TCP connection.
-4. The receiver saves it automatically into its `downloads/` folder.
+```mermaid
+graph LR
+    A["gui.py<br/>(App)"] -- "method calls<br/>(connect, send_text, send_file)" --> B["p2p_node.py<br/>(PeerNode)"]
+    B -- "on_event() → queue" --> A
+    B -- "uses for framing" --> C["protocol.py"]
+    B <--> D[(TCP Socket)]
+    D <--> E["Other Peer"]
+```
 
-| Sender | Receiver |
+- **GUI thread**: draws widgets, reads the event queue every 100 ms
+- **Accept thread**: one, for the lifetime of the peer, waiting for new connections
+- **Listen thread**: one *per connected peer*, blocking on incoming messages
+- **Connect thread**: one per outgoing connection attempt, so a slow address never freezes the window
+
+Tkinter isn't thread-safe, so network threads never touch a widget directly — they drop an event on a `queue.Queue` and the main thread picks it up.
+
+### Message Framing
+
+TCP is a byte stream with no concept of "messages." Every JSON message is prefixed with its own length so the receiver always knows exactly where it ends:
+
+```
+┌─────────────────────┬───────────────────────────┐
+│  4 bytes (length)    │   N bytes (JSON payload)   │
+└─────────────────────┴───────────────────────────┘
+```
+
+### File Transfer
+
+```
+sender   →  { "type": "file", "filename": "cat.jpg", "filesize": 204800 }
+sender   →  [ raw bytes, streamed 64 KB at a time ]
+receiver →  reads exactly `filesize` bytes → writes to downloads/
+```
+
+## 📨 Message Protocol
+
+| Type | Sent by | Carries |
+|---|---|---|
+| `hello` | Connecting peer | `peer_id`, `peer_name`, `port` |
+| `hello_ack` | Accepting peer | `peer_id`, `peer_name`, `port` |
+| `text` | Either peer | `sender_id`, `sender_name`, `message` |
+| `file` | Either peer | `sender_id`, `sender_name`, `filename`, `filesize` |
+
+## 🧪 Testing
+
+| Scenario | How |
 |---|---|
-| ![File sent](screenshots/05_file_sent.png) | ![File received](screenshots/06_file_received.png) |
+| **Same computer** | Two terminals, ports `5000` / `5001`, connect via `127.0.0.1` |
+| **Two computers** | Same Wi-Fi/LAN, connect via each other's local IP |
+| **3+ peers** | Start Alice, Bob, and Charlie on different ports, cross-connect them, send files between every pair |
 
-The received file inside the `downloads/` folder:
+Try all file types: text, image, audio, video, PDF, ZIP.
 
-![Downloads folder](screenshots/07_downloads_folder.png)
+## ⚠️ Error Handling
 
-## Error Handling
+| Situation | What happens |
+|---|---|
+| Port already in use | Dialog box, peer isn't started |
+| Connecting to a dead port | `Connection refused by <ip>:<port>` in the log |
+| Connecting to an unreachable address | Times out after 5 seconds, logged |
+| A peer disconnects mid-chat | Removed from the list, logged — other connections unaffected |
+| Bad port number typed | Blocked before any socket opens |
 
-Bad input, refused connections, timeouts and unexpected disconnects are
-reported in the chat log rather than crashing the app.
+## 🚧 Limitations
 
-![Error example](screenshots/08_error_example.png)
+- 🔓 No encryption or authentication — everything is plain-text JSON
+- 📍 No peer discovery — you must already know the IP and port
+- 📝 A file with a name that already exists in `downloads/` gets overwritten
+- 🧊 Sending a very large file can briefly freeze the window (it runs on the GUI thread)
+<div align="center">
 
-## How It Works
+Built with 🐍 Python sockets, 🧵 threads, and no server at all.
 
-### Architecture
-
-```
-            +---------------------------- one peer ----------------------------+
-            |                                                                  |
-  user ---> |  gui.py (App)  --calls-->  p2p_node.py (PeerNode)                |
-            |      ^                         |  server thread: accept()        |
-            |      |                         |  one thread per peer: recv()    |
-            |  queue.Queue  <--on_event()----+                                 |
-            |                                |  uses protocol.py for framing   |
-            +--------------------------------|---------------------------------+
-                                             v
-                                      TCP sockets  <---->  other peers
-```
-
-### Handshake
-
-```
-  Peer B (client)                              Peer A (server)
-       |  --- connect() ---------------------->   |
-       |  --- hello {id, name, port} --------->   |
-       |  <-- hello_ack {id, name, port} -----    |
-       |   both sides register each other and start listening
-```
-
-### Message framing
-
-TCP is a byte stream and does not preserve message boundaries. Every JSON
-message is therefore prefixed with its own length:
-
-```
-[ 4 bytes: payload length (big-endian) ][ N bytes: JSON payload ]
-```
-
-The receiver reads exactly 4 bytes, then exactly N bytes (`recv_exact`), so
-messages are never merged or cut in half.
-
-### Message types
-
-| Type | Purpose | Fields |
-|------|---------|--------|
-| `hello` | Sent by the connecting peer right after `connect()` | `peer_id`, `peer_name`, `port` |
-| `hello_ack` | Reply from the accepting peer | `peer_id`, `peer_name`, `port` |
-| `text` | Chat message | `sender_id`, `sender_name`, `message` |
-| `file` | Metadata sent *before* the raw file bytes | `sender_id`, `sender_name`, `filename`, `filesize` |
-
-### File transfer
-
-```
-sender:    [file JSON message: name + size] [raw bytes ... 64 KB chunks ...]
-receiver:  read JSON header -> read exactly `filesize` bytes -> write to downloads/
-```
-
-### Threads
-
-- 1 thread runs the server `accept()` loop
-- 1 thread per connected peer waits for incoming messages
-- 1 short-lived thread per outgoing connection attempt (so the GUI never freezes)
-- Tkinter is not thread-safe, so worker threads only push events onto a
-  `queue.Queue`; the GUI reads that queue every 100 ms with `root.after()`
-
-For a line-by-line walkthrough of the code, see
-[CODE_EXPLANATION.md](CODE_EXPLANATION.md).
-
-## Limitations
-
-- No encryption or authentication: messages travel as plain text
-- Peers must know each other's IP and port (no discovery)
-- If two files with the same name arrive, the newer one overwrites the older
-- Files are sent from the GUI thread, so the window can freeze briefly while
-  sending a very large file
-- Works on a LAN or localhost; no NAT traversal
-
-## Not Included (Out of Scope)
-
-Per the assignment scope, this project intentionally does **not** include
-blockchain, cryptocurrency, DHT, NAT traversal, end-to-end encryption,
-authentication, or any consensus mechanism. The focus is direct P2P
-communication over TCP sockets.
+</div>
